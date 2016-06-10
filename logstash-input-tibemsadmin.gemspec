@@ -1,7 +1,7 @@
 Gem::Specification.new do |s|
   s.name          = "logstash-input-tibemsadmin"
   s.version       = "0.0.1"
-  s.licenses      = ["GPL-3.0"]
+  s.licenses      = ["Apache-2.0"]
   s.summary       = "This imput get tibems admin info and stats"
   s.description   = "This gem is a Logstash plugin required to be installed on top of the Logstash core pipeline using $LS_HOME/bin/logstash-plugin install gemname. This gem is not a stand-alone program"
   s.authors       = ["Justo Alonso"]

@@ -52,22 +52,25 @@ class LogStash::Inputs::TibEMSAdmin < LogStash::Inputs::Base
         throw e
       end
 
-      queues_count = info[:queue]
-      topics_count = info[:topic]
-      consumers_count = info[:consumer]
-      producers_count = info[:producer]
+      event_info = { "queue" => {
+                     "type" => "server",
+		     "queues" => info["queueCount"],
+		     "topics" => info["topicCount"],
+                     "consumers" => info["consumerCount"],
+		     "producers" => info["producerCount"]
+		}
+      }
 
-      event = LogStash::Event.new("message" => @message, "host" => @host,
-                              "queue.type" => "server", "queue.queues" => queues_count, "queue.topics" => topics_count,
-                        "queue.consumers" => consumers_count, "queue.producers" => producers_count )
+      event = LogStash::Event.new(event_info)
+
       decorate(event)
       queue << event
 
-      queues = info[:queues]
-      queues.each { |q| create_event(queue, q, "queue") }
+      tibco_queues = info["queues"]
+      tibco_queues.each { |q| create_event(queue, q, "queue") }
 
-      topics = info[:topics]
-      topics.each { |q| create_event(queue, q, "topic") }
+      tibco_topics = info["topics"]
+      tibco_topics.each { |q| create_event(queue, q, "topic") }
 
       # because the sleep interval can be big, when shutdown happens
       # we want to be able to abort the sleep
@@ -88,25 +91,46 @@ class LogStash::Inputs::TibEMSAdmin < LogStash::Inputs::Base
 
   private
   def create_event(queue, info, type)
-      event = LogStash::Event.new("message" => @message, "host" => @host,
-                      "queue.name" => info[:name],
-                      "queue.name" => type,
-                      "queue.deliveredMessageCount" => info[:deliveredMessageCount],
-                      "queue.flowControlMaxBytes" => info[:flowControlMaxBytes],
-                      "queue.maxBytes" => info[:maxBytes],
-                      "queue.maxMsgs" => info[:maxMsgs],
-                      "queue.pendingMessageCount" => info[:pendingMessageCount],
-                      "queue.pendingMessageSize" => info[:pendingMessageSize],
-                      "queue.pendingPersistentMessageCount" => info[:pendingPersistentMessageCount],
-                      "queue.receiverCount" => info[:receiverCount],
-                      "queue.outbound.byteRate" => info[:outbound][:byteRate],
-                      "queue.outbound.messageRate" => info[:outbound][:messageRate],
-                      "queue.outbound.totalBytes" => info[:outbound][:totalBytes],
-                      "queue.outbound.totalMessages" => info[:outbound][:toalMessages],
-                      "queue.inbound.byteRate" => info[:inbound][:byteRate],
-                      "queue.inbound.messageRate" => info[:inbound][:messageRate],
-                      "queue.inbound.totalBytes" => info[:inbound][:totalBytes],
-                      "queue.inbound.totalMessages" => info[:inbound][:toalMessages])
+
+#queue:{"name"=>"name", "consumerCount"=>0, "flowControlMaxBytes"=>0, "pendingMessageCount"=>0, "pendingMessageSize"=>0, "receiverCount"=>0, "deliveredMessageCount"=>0, "inTransitMessageCount"=>0, "maxRedelivery"=>0, "inbound"=>{"totalMessages"=>0, "messageRate"=>0, "totalBytes"=>0, "byteRate"=>0}, "outbound"=>{"totalMessages"=>0, "messageRate"=>0, "totalBytes"=>0, "byteRate"=>0}},
+#topic:{"name"=>"name", "consumerCount"=>0, "flowControlMaxBytes"=>0, "pendingMessageCount"=>0, "pendingMessageSize"=>0, "subscriberCount"=>0, "durableCount"=>0, "activeDurableCount"=>0, "inbound"=>{"totalMessages"=>17, "messageRate"=>0, "totalBytes"=>27783, "byteRate"=>0}, "outbound"=>{"totalMessages"=>17, "messageRate"=>0, "totalBytes"=>27783, "byteRate"=>0}}
+
+      event_info = {
+		      "host" => @host,
+		      "queue" => {
+                          "name" => info["name"],
+                          "type" => type,
+                          "consumerCount" => info["consumerCount"],
+                          "flowControlMaxBytes" => info["flowControlMaxBytes"],
+                          "pendingMessageCount" => info["pendingMessageCount"],
+                          "pendingMessageSize" => info["pendingMessageSize"],
+			  "outbound" => {
+                              "totalMessages" => info["outbound"]["totalMessages"],
+                              "messageRate" => info["outbound"]["messageRate"],
+                              "totalBytes" => info["outbound"]["totalBytes"],
+                              "byteRate" => info["outbound"]["byteRate"],
+			  },
+			  "inbound" => {
+                              "totalMessages" => info["inbound"]["totalMessages"],
+                              "messageRate" => info["inbound"]["messageRate"],
+                              "totalBytes" => info["inbound"]["totalBytes"],
+                              "byteRate" => info["inbound"]["byteRate"]
+			  }
+		      }
+      }
+
+      if (type == "topic")
+        event_info["queue"]["subscriberCount"] = info["subscriberCount"]
+        event_info["queue"]["durableCount"] = info["durableCount"]
+        event_info["queue"]["activeDurableCount"] = info["activeDurableCount"]
+      else
+        event_info["queue"]["receiverCount"] = info["receiverCount"]
+        event_info["queue"]["deliveredMessageCount"] = info["deliveredMessageCount"]
+        event_info["queue"]["inTransitMessageCount"] = info["inTransitMessageCount"]
+        event_info["queue"]["maxRedelivery"] = info["maxRedelivery"]
+      end
+
+      event = LogStash::Event.new(event_info)
 
       decorate(event)
       queue << event

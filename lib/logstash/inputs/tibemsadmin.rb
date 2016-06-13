@@ -57,7 +57,29 @@ class LogStash::Inputs::TibEMSAdmin < LogStash::Inputs::Base
 		     "queues" => info["queueCount"],
 		     "topics" => info["topicCount"],
                      "consumers" => info["consumerCount"],
-		     "producers" => info["producerCount"]
+		     "producers" => info["producerCount"],
+      	             "asyncDBSize" => info["asyncDBSize"],
+      	             "connections" => info["connectionCount"],
+      	             "diskReadOperationsRate" => info["diskReadOperationsRate"],
+      	             "diskReadRate" => info["diskReadRate"],
+      	             "diskWriteOperationsRate" => info["diskWriteOperationsRate"],
+      	             "diskWriteRate" => info["diskWriteRate"],
+      	             "durables" => info["durableCount"],
+      	             "inboundBytesRate" => info["inboundBytesRate"],
+      	             "inboundMessages" => info["inboundMessageCount"],
+      	             "inboundMessageRate" => info["inboundMessageRate"],
+      	             "maxConnections" => info["maxConnections"],
+      	             "maxMsgMemory" => info["maxMsgMemory"],
+      	             "msgMem" => info["msgMem"],
+      	             "msgMemPooled" => info["msgMemPooled"],
+      	             "outboundBytesRate" => info["outboundBytesRate"],
+      	             "outboundMessages" => info["outboundMessageCount"],
+      	             "outboundMessageRate" => info["outboundMessageRate"],
+      	             "pendingMessages" => info["pendingMessageCount"],
+      	             "pendingMessageSize" => info["pendingMessageSize"],
+      	             "reserveMemory" => info["reserveMemory"],
+      	             "sessions" => info["sessionCount"],
+      	             "syncDBSize" => info["syncDBSize"]
 		}
       }
 
@@ -100,10 +122,14 @@ class LogStash::Inputs::TibEMSAdmin < LogStash::Inputs::Base
 		      "queue" => {
                           "name" => info["name"],
                           "type" => type,
-                          "consumerCount" => info["consumerCount"],
+                          "consumers" => info["consumerCount"],
                           "flowControlMaxBytes" => info["flowControlMaxBytes"],
-                          "pendingMessageCount" => info["pendingMessageCount"],
+                          "maxBytes" => info["maxBytes"],
+                          "maxMsgs" => info["maxMsgs"],
+                          "pendingMessages" => info["pendingMessageCount"],
                           "pendingMessageSize" => info["pendingMessageSize"],
+                          "pendingPersistentMessages" => info["pendingPersistentMessageCount"],
+                          "pendingPersistentMessageSize" => info["pendingPersistentMessageSize"],
 			  "outbound" => {
                               "totalMessages" => info["outbound"]["totalMessages"],
                               "messageRate" => info["outbound"]["messageRate"],
@@ -120,14 +146,14 @@ class LogStash::Inputs::TibEMSAdmin < LogStash::Inputs::Base
       }
 
       if (type == "topic")
-        event_info["queue"]["subscriberCount"] = info["subscriberCount"]
-        event_info["queue"]["durableCount"] = info["durableCount"]
-        event_info["queue"]["activeDurableCount"] = info["activeDurableCount"]
+        event_info["queue"]["activeDurables"] = info["activeDurableCount"]
+        event_info["queue"]["durables"] = info["durableCount"]
+        event_info["queue"]["subscribers"] = info["subscriberCount"]
       else
-        event_info["queue"]["receiverCount"] = info["receiverCount"]
-        event_info["queue"]["deliveredMessageCount"] = info["deliveredMessageCount"]
-        event_info["queue"]["inTransitMessageCount"] = info["inTransitMessageCount"]
+        event_info["queue"]["deliveredMessages"] = info["deliveredMessageCount"]
+        event_info["queue"]["inTransitMessages"] = info["inTransitMessageCount"]
         event_info["queue"]["maxRedelivery"] = info["maxRedelivery"]
+        event_info["queue"]["receivers"] = info["receiverCount"]
       end
 
       event = LogStash::Event.new(event_info)

@@ -2,13 +2,14 @@
 require "logstash/inputs/base"
 require "logstash/namespace"
 require "tibems"
+require "stud/interval"
 require "socket" # for Socket.gethostname
 
 # Generate a repeating message.
 #
 # This plugin is intented only as an example.
 
-class LogStash::Inputs::TibEMSAdmin < LogStash::Inputs::Base
+class LogStash::Inputs::Tibemsadmin < LogStash::Inputs::Base
   config_name "tibemsadmin"
 
   # If undefined, Logstash will complain, even if codec is unused.

@@ -48,58 +48,77 @@ class LogStash::Inputs::Tibemsadmin < LogStash::Inputs::Base
     while !stop?
       begin
         info = @tibems.get_info()
+      rescue com.tibco.tibjms.admin.TibjmsAdminSecurityException => e
+        logger.error("Unable to get info from tibems admin connection, security exception", :tibems_error_message => e)
+        Stud.stoppable_sleep(@interval) { stop? }
+      rescue com.tibco.tibjms.admin.TibjmsAdminException => e
+        if e.inspect.include? "Session is closed" or e.inspect.include? "Connection has been terminated"
+          Stud.stoppable_sleep(@interval) { stop? }
+          register
+        elsif e.inspect.include? "store info: File not found"
+          Stud.stoppable_sleep(@interval) { stop? }
+        else
+          logger.error("Unable to get info from tibems admin connection", :tibems_error_message => e)
+          Stud.stoppable_sleep(@interval) { stop? }
+          throw e
+        end
       rescue => e
         logger.error("Unable to get info from tibems admin connection", :tibems_error_message => e)
+        Stud.stoppable_sleep(@interval) { stop? }
         throw e
+      else
+
+				event_info = { "queue" => {
+											 "type" => "server",
+											 "queues" => info["queueCount"],
+											 "topics" => info["topicCount"],
+											 "consumers" => info["consumerCount"],
+											 "producers" => info["producerCount"],
+											 "asyncDBSize" => info["asyncDBSize"],
+											 "connections" => info["connectionCount"],
+											 "diskReadOperationsRate" => info["diskReadOperationsRate"],
+											 "diskReadRate" => info["diskReadRate"],
+											 "diskWriteOperationsRate" => info["diskWriteOperationsRate"],
+											 "diskWriteRate" => info["diskWriteRate"],
+											 "durables" => info["durableCount"],
+											 "inboundBytesRate" => info["inboundBytesRate"],
+											 "inboundMessages" => info["inboundMessageCount"],
+											 "inboundMessageRate" => info["inboundMessageRate"],
+											 "maxConnections" => info["maxConnections"],
+											 "maxMsgMemory" => info["maxMsgMemory"],
+											 "msgMem" => info["msgMem"],
+											 "msgMemPooled" => info["msgMemPooled"],
+											 "outboundBytesRate" => info["outboundBytesRate"],
+											 "outboundMessages" => info["outboundMessageCount"],
+											 "outboundMessageRate" => info["outboundMessageRate"],
+											 "pendingMessages" => info["pendingMessageCount"],
+											 "pendingMessageSize" => info["pendingMessageSize"],
+											 "reserveMemory" => info["reserveMemory"],
+											 "sessions" => info["sessionCount"],
+											 "syncDBSize" => info["syncDBSize"]
+										 }
+				}
+
+				event = LogStash::Event.new(event_info)
+
+				decorate(event)
+				queue << event
+
+				tibco_queues = info["queues"]
+				tibco_queues.each { |q| create_event(queue, q, "queue") }
+
+				#tibco_topics = info["topics"]
+				#tibco_topics.each { |q| create_event(queue, q, "topic") }
+
+				tibco_stores = info["stores"]
+        tibco_stores.each { |q| create_event_store(queue, q) }
+	#
+	# because the sleep interval can be big, when shutdown happens
+	# we want to be able to abort the sleep
+	# Stud.stoppable_sleep will frequently evaluate the given block
+	# and abort the sleep(@interval) if the return value is true
+	Stud.stoppable_sleep(@interval) { stop? }
       end
-
-      event_info = { "queue" => {
-                     "type" => "server",
-		     "queues" => info["queueCount"],
-		     "topics" => info["topicCount"],
-                     "consumers" => info["consumerCount"],
-		     "producers" => info["producerCount"],
-      	             "asyncDBSize" => info["asyncDBSize"],
-      	             "connections" => info["connectionCount"],
-      	             "diskReadOperationsRate" => info["diskReadOperationsRate"],
-      	             "diskReadRate" => info["diskReadRate"],
-      	             "diskWriteOperationsRate" => info["diskWriteOperationsRate"],
-      	             "diskWriteRate" => info["diskWriteRate"],
-      	             "durables" => info["durableCount"],
-      	             "inboundBytesRate" => info["inboundBytesRate"],
-      	             "inboundMessages" => info["inboundMessageCount"],
-      	             "inboundMessageRate" => info["inboundMessageRate"],
-      	             "maxConnections" => info["maxConnections"],
-      	             "maxMsgMemory" => info["maxMsgMemory"],
-      	             "msgMem" => info["msgMem"],
-      	             "msgMemPooled" => info["msgMemPooled"],
-      	             "outboundBytesRate" => info["outboundBytesRate"],
-      	             "outboundMessages" => info["outboundMessageCount"],
-      	             "outboundMessageRate" => info["outboundMessageRate"],
-      	             "pendingMessages" => info["pendingMessageCount"],
-      	             "pendingMessageSize" => info["pendingMessageSize"],
-      	             "reserveMemory" => info["reserveMemory"],
-      	             "sessions" => info["sessionCount"],
-      	             "syncDBSize" => info["syncDBSize"]
-		}
-      }
-
-      event = LogStash::Event.new(event_info)
-
-      decorate(event)
-      queue << event
-
-      tibco_queues = info["queues"]
-      tibco_queues.each { |q| create_event(queue, q, "queue") }
-
-      tibco_topics = info["topics"]
-      tibco_topics.each { |q| create_event(queue, q, "topic") }
-
-      # because the sleep interval can be big, when shutdown happens
-      # we want to be able to abort the sleep
-      # Stud.stoppable_sleep will frequently evaluate the given block
-      # and abort the sleep(@interval) if the return value is true
-      Stud.stoppable_sleep(@interval) { stop? }
     end # loop
   end # def run
 
@@ -113,11 +132,31 @@ class LogStash::Inputs::Tibemsadmin < LogStash::Inputs::Base
   end
 
   private
+  def create_event_store(queue, info)
+    event_info = {
+      "host" => @host,
+      "store" => {
+	"name" => info["name"],
+        "type" => "store",
+      	"msgBytes" => info["msgBytes"],
+      	"getMsgCount" => info["getMsgCount"],
+      	"destinationDefrag" => info["destinationDefrag"],
+      	"fileMinimum" => info["fileMinimum"],
+      	"fileName" => info["fileName"],
+      	"fragmentation" => info["fragmentation"],
+      	"inUseSpace" => info["inUseSpace"],
+      	"notInUseSpace" => info["notInUseSpace"],
+      	"size" => info["size"],
+      	"writeRate" => info["writeRate"]
+      }
+    }
+    event = LogStash::Event.new(event_info)
+    decorate(event)
+    queue << event
+  end
+
+  private
   def create_event(queue, info, type)
-
-#queue:{"name"=>"name", "consumerCount"=>0, "flowControlMaxBytes"=>0, "pendingMessageCount"=>0, "pendingMessageSize"=>0, "receiverCount"=>0, "deliveredMessageCount"=>0, "inTransitMessageCount"=>0, "maxRedelivery"=>0, "inbound"=>{"totalMessages"=>0, "messageRate"=>0, "totalBytes"=>0, "byteRate"=>0}, "outbound"=>{"totalMessages"=>0, "messageRate"=>0, "totalBytes"=>0, "byteRate"=>0}},
-#topic:{"name"=>"name", "consumerCount"=>0, "flowControlMaxBytes"=>0, "pendingMessageCount"=>0, "pendingMessageSize"=>0, "subscriberCount"=>0, "durableCount"=>0, "activeDurableCount"=>0, "inbound"=>{"totalMessages"=>17, "messageRate"=>0, "totalBytes"=>27783, "byteRate"=>0}, "outbound"=>{"totalMessages"=>17, "messageRate"=>0, "totalBytes"=>27783, "byteRate"=>0}}
-
       event_info = {
 		      "host" => @host,
 		      "queue" => {
@@ -146,17 +185,17 @@ class LogStash::Inputs::Tibemsadmin < LogStash::Inputs::Base
 		      }
       }
 
-      if (type == "topic")
-        event_info["queue"]["activeDurables"] = info["activeDurableCount"]
-        event_info["queue"]["durables"] = info["durableCount"]
-        event_info["queue"]["subscribers"] = info["subscriberCount"]
-      else
+#      if (type == "topic")
+#        event_info["queue"]["activeDurables"] = info["activeDurableCount"]
+#        event_info["queue"]["durables"] = info["durableCount"]
+#        event_info["queue"]["subscribers"] = info["subscriberCount"]
+#      else
         event_info["queue"]["deliveredMessages"] = info["deliveredMessageCount"]
         event_info["queue"]["inTransitMessages"] = info["inTransitMessageCount"]
         event_info["queue"]["maxRedelivery"] = info["maxRedelivery"]
         event_info["queue"]["receivers"] = info["receiverCount"]
-      end
-
+#      end
+#
       event = LogStash::Event.new(event_info)
 
       decorate(event)
